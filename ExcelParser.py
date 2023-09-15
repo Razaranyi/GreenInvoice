@@ -5,7 +5,7 @@ def parse_excel(file_path, sheet_name):
     sheet = wb[sheet_name]  # Access the sheet by name
 
     data = []
-    for row in sheet.iter_rows(min_row=2, values_only=True):
+    for row in sheet.iter_rows(min_row=2, values_only=True):#mark
         client = {
             'Client': row[0],
             'Date Treated': row[1],

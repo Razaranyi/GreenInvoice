@@ -1,10 +1,10 @@
 import json
-import logging
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from green_invoice.models import Currency, DocumentLanguage, DocumentType, PaymentCardType, PaymentDealType, PaymentType, IncomeVatType
+from logger import Logger
 
-logger = logging.getLogger(__name__)
+logger = Logger.get_logger(__name__)
 
 
 class GreenInvoiceHandler:
