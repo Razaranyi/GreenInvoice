@@ -1,10 +1,10 @@
 import json
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
-from green_invoice.models import Currency, DocumentLanguage, DocumentType, PaymentCardType, PaymentDealType, PaymentType, IncomeVatType
-from logger import Logger
+from green_invoice.models import Currency, DocumentLanguage, DocumentType, PaymentCardType, PaymentDealType, \
+    PaymentType, IncomeVatType
 
-logger = Logger.get_logger(__name__)
+from logger import Logger
 
 
 class GreenInvoiceHandler:
@@ -16,22 +16,24 @@ class GreenInvoiceHandler:
         self.status = None
         self.key = key
         self.secret = secret
+        self.logger = Logger.get_logger("GreenInvoiceHandler")
 
     def send_POST_request(self, headers, end_point, values, request_type):
         global response_body
         data = json.dumps(values).encode('utf-8')  # Convert the dictionary to a JSON string and then encode it to bytes
-        logger.info("Sending {} request; URL: {}{}, Values: {}".format(request_type, self.BASE_URL, end_point, values))
+        self.logger.info(
+            "Sending {} request; URL: {}{}, Values: {}".format(request_type, self.BASE_URL, end_point, values))
         try:
             request = Request(self.BASE_URL + end_point, data=data, headers=headers)
             response_body = urlopen(request).read()
             response = urlopen(request)
             status = response.status
             if status == 200:
-                logger.info(response_body)
+                self.logger.info(response_body)
                 pass
         except HTTPError as err:
-            logger.error(err)
-            logger.error(response_body)
+            self.logger.error(err)
+            self.logger.error(response_body)
             exit(-1)
         return json.loads(response_body)  # Parse the JSON response and return
 
@@ -51,7 +53,7 @@ class GreenInvoiceHandler:
 
     def search_client_by_name(self, name):
         end_point = '/clients/search'
-        logger.info("Handling {}".format(name))
+        self.logger.info("Handling {}".format(name))
 
         values = {
             'name': name,
@@ -68,28 +70,36 @@ class GreenInvoiceHandler:
             parsed_response = self.send_POST_request(headers, end_point, values, "client search")
             total_value = parsed_response['total']
             if total_value == 0:
-                raise RuntimeError
-            else:
-                # elif total_value == 1:
-                logger.debug("client {}, found total {} client".format(name, total_value))
+                return None
+
+            elif total_value == 1:
+                self.logger.debug("client {}, found total {} client".format(name, total_value))
                 first_item = parsed_response['items'][0]
                 id_value = first_item['id']
-                logger.debug("Parsed id of {} is: {}".format(name, id_value))
-                self.generate_new_invoice(id_value)
+                self.logger.debug("Parsed id of {} is: {}".format(name, id_value))
+                return id_value
                 pass
-            # else:
-            #     logger.warning("Found {} clients under the name {}".format(total_value, name))
+            else:
+                self.logger.warning("Found {} clients under the name {}".format(total_value, name))
+                return None
         except RuntimeError:
-            logger.error("Client: {} was not found".format(name))
+            self.logger.error("Client: {} was not found".format(name))
 
-    def generate_new_invoice(self, id_value):
+    def generate_new_invoice(self, id_value, parsed_values):
         end_point = '/documents/preview'
+        values = parsed_values
+
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + self.JWT
+        }
+        response_body = self.send_POST_request(headers, end_point, values, "preview")
+
+    def parse_values(self, id_value, catalogNum, description, quantity, price, payment_date, payment_method, dates, dueDate, appType):
+
         values = {
-            'description': 'פיזיותרפיה',
-            # 'remarks': 'mock env',
-            # 'email': 'example@Raz.Aranyi',
             'type': DocumentType.TAX_INVOICE_RECEIPT,
-            # 'date': '2023-07-07',
+            'date': payment_date,
             'lang': DocumentLanguage.ENGLISH,
             'currency': Currency.ILS,
             'vatType': 0,
@@ -105,28 +115,23 @@ class GreenInvoiceHandler:
 
             'income': [
                 {
-                    'description': 'physo',
-                    'quantity': 1,
-                    'price': 300,
+                    "catalogNum": catalogNum,
+                    'description': description,
+                    'quantity': quantity,
+                    'price': price,
                     'currency': Currency.ILS,
                     'vatType': 1,
                 }
-                   ],
+            ],
             'payment': [
                 {
-                    'date': '2023-07-07',
-                    'type': PaymentType.PAYMENT_APP,
-                    'price': 300,
+                    'date': payment_date,
+                    'type': payment_method,
+                    'price': price,
                     'currency': Currency.ILS,
                     'dueDate': '2023-07-14',
                     'appType': 3
                 }
-                ],
+            ],
         }
 
-        headers = {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + self.JWT
-            }
-
-        response_body = self.send_POST_request(headers, end_point, values, "preview")
