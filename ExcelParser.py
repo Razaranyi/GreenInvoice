@@ -59,13 +59,12 @@ class ExcelParser:
         try:
             if 0 <= row_index < len(self.data):
                 self.data[row_index]['Invoice'] = 'True'
-                self.__save_data()
             else:
                 raise IndexError(f"Error: Index out of range: {row_index}")
         except IndexError as e:
             self.logger.error(e)
 
-    def __save_data(self):
+    def save_data(self):
         try:
             workbook = load_workbook(filename=self.file_path)
             sheet = workbook['EFT & Paybox']

@@ -91,8 +91,25 @@ class GreenInvoiceHandler:
             self.logger.error(f"Error in finding client: {err}")
             return None
 
-    def generate_new_invoice(self, parsed_values, client_name):
+    def generate_new_invoice_preview(self, parsed_values, client_name):
+        print(f"Generating preview for {client_name}")
         end_point = '/documents/preview'
+        values = parsed_values
+
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + self.JWT
+        }
+        response_body = self.__send_POST_request(headers, end_point, values, "preview")
+        if 'file' in response_body:
+            time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.__base64_to_pdf(response_body['file'], f"Samples/Invoices/{client_name}_{time_stamp}_Invoice.pdf")
+        else:
+            self.logger.error("'file' key does not exist in the response body.")
+
+    def generate_new_invoice(self, parsed_values, client_name):
+        print(f"Generating invoice for {client_name}")
+        end_point = '/documents'
         values = parsed_values
 
         headers = {
