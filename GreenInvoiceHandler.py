@@ -1,4 +1,6 @@
+import base64
 import json
+from datetime import datetime
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from green_invoice.models import Currency, DocumentLanguage, DocumentType, PaymentCardType, PaymentDealType, \
@@ -29,6 +31,9 @@ class GreenInvoiceHandler:
             response = urlopen(request)
             status = response.status
             if status == 200:
+                if response_body is not "preview":
+                    self.logger.info("Response body: {}".format(response_body))
+                    pass
                 self.logger.info(response_body)
                 pass
         except HTTPError as err:
@@ -86,7 +91,7 @@ class GreenInvoiceHandler:
             self.logger.error(f"Error in finding client: {err}")
             return None
 
-    def generate_new_invoice(self, parsed_values):
+    def generate_new_invoice(self, parsed_values, client_name):
         end_point = '/documents/preview'
         values = parsed_values
 
@@ -95,14 +100,18 @@ class GreenInvoiceHandler:
             'Authorization': 'Bearer ' + self.JWT
         }
         response_body = self.__send_POST_request(headers, end_point, values, "preview")
-        print(response_body)
+        if 'file' in response_body:
+            time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.__base64_to_pdf(response_body['file'], f"Samples/Invoices/{client_name}_{time_stamp}_Invoice.pdf")
+        else:
+            self.logger.error("'file' key does not exist in the response body.")
 
     def parse_values(self, id_value, payment_details, payment_date, income_list):
 
         values = {
 
             'type': DocumentType.TAX_INVOICE_RECEIPT,
-            'date': payment_date,
+            # 'date': payment_date,
             'lang': DocumentLanguage.ENGLISH,
             'currency': Currency.ILS,
             'vatType': 0,
@@ -122,3 +131,14 @@ class GreenInvoiceHandler:
         self.logger.debug(f"Values: {values}")
 
         return values
+
+    def __base64_to_pdf(self, base64_data, output_filepath):
+        try:
+            decoded_data = base64.b64decode(base64_data)
+
+            with open(output_filepath, 'wb') as file:
+                file.write(decoded_data)
+
+            self.logger.info(f"The PDF has been successfully saved at {output_filepath}")
+        except Exception as e:
+            self.logger.error(f"An error occurred: {e}")

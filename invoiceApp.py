@@ -67,7 +67,7 @@ class InvoiceApp:
                 income_list = self.__construct_income_list()
                 payment_details = self.__construct_payment_details()
                 values = self.green_invoice_client.parse_values(client_id, payment_details, self.date_paid, income_list)
-                self.green_invoice_client.generate_new_invoice(values)
+                self.green_invoice_client.generate_new_invoice(values, self.client)
 
     def __parse_data(self, row_index):
         try:
