@@ -1,11 +1,12 @@
 import logging
 from datetime import datetime
 
+current_date_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+
 
 class Logger:
     @staticmethod
     def get_logger(module_name):
-        current_date_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         logger = logging.getLogger(module_name)
         logger.setLevel(logging.DEBUG)
