@@ -18,7 +18,7 @@ class GreenInvoiceHandler:
         self.secret = secret
         self.logger = Logger.get_logger("GreenInvoiceHandler")
 
-    def send_POST_request(self, headers, end_point, values, request_type):
+    def __send_POST_request(self, headers, end_point, values, request_type):
         global response_body
         data = json.dumps(values).encode('utf-8')  # Convert the dictionary to a JSON string and then encode it to bytes
         self.logger.info(
@@ -47,7 +47,7 @@ class GreenInvoiceHandler:
         headers = {
             'Content-Type': 'application/json'
         }
-        parsed_response = self.send_POST_request(headers, end_point, values, "JWT")
+        parsed_response = self.__send_POST_request(headers, end_point, values, "JWT")
 
         self.JWT = parsed_response['token']
 
@@ -67,7 +67,7 @@ class GreenInvoiceHandler:
             'Authorization': 'Bearer ' + self.JWT
         }
         try:
-            parsed_response = self.send_POST_request(headers, end_point, values, "client search")
+            parsed_response = self.__send_POST_request(headers, end_point, values, "client search")
             total_value = parsed_response['total']
             if total_value == 0:
                 return None
@@ -82,10 +82,11 @@ class GreenInvoiceHandler:
             else:
                 self.logger.warning("Found {} clients under the name {}".format(total_value, name))
                 return None
-        except RuntimeError:
-            self.logger.error("Client: {} was not found".format(name))
+        except RuntimeError as err:
+            self.logger.error(f"Error in finding client: {err}")
+            return None
 
-    def generate_new_invoice(self, id_value, parsed_values):
+    def generate_new_invoice(self, parsed_values):
         end_point = '/documents/preview'
         values = parsed_values
 
@@ -93,11 +94,13 @@ class GreenInvoiceHandler:
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + self.JWT
         }
-        response_body = self.send_POST_request(headers, end_point, values, "preview")
+        response_body = self.__send_POST_request(headers, end_point, values, "preview")
+        print(response_body)
 
-    def parse_values(self, id_value, catalogNum, description, quantity, price, payment_date, payment_method, dates, dueDate, appType):
+    def parse_values(self, id_value, payment_details, payment_date, income_list):
 
         values = {
+
             'type': DocumentType.TAX_INVOICE_RECEIPT,
             'date': payment_date,
             'lang': DocumentLanguage.ENGLISH,
@@ -113,25 +116,9 @@ class GreenInvoiceHandler:
                     'id': id_value,
                 },
 
-            'income': [
-                {
-                    "catalogNum": catalogNum,
-                    'description': description,
-                    'quantity': quantity,
-                    'price': price,
-                    'currency': Currency.ILS,
-                    'vatType': 1,
-                }
-            ],
-            'payment': [
-                {
-                    'date': payment_date,
-                    'type': payment_method,
-                    'price': price,
-                    'currency': Currency.ILS,
-                    'dueDate': '2023-07-14',
-                    'appType': 3
-                }
-            ],
+            'income': income_list,
+            'payment': payment_details,
         }
+        self.logger.debug(f"Values: {values}")
 
+        return values

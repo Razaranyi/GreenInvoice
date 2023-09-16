@@ -1,6 +1,9 @@
+from datetime import datetime
 from openpyxl import load_workbook
 
 from logger import Logger
+
+current_date_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 class ExcelParser:
@@ -25,9 +28,11 @@ class ExcelParser:
                 row_data = {headers[col_idx]: cell for col_idx, cell in enumerate(row) if col_idx < len(headers)}
                 self.data.append(row_data)
         except FileNotFoundError:
-            print(f"Error: File not found: {file_path}")
+            self.logger.error(f"Error: File not found: {file_path}")
+            exit(-1)
         except Exception as e:
-            print(f"An unexpected error occurred: {e}")
+            self.logger.error(f"An unexpected error occurred: {e}")
+            exit(-1)
 
     def get_row(self, row_index):
         self.logger.debug(f"Getting row {row_index}")
@@ -58,7 +63,7 @@ class ExcelParser:
             else:
                 raise IndexError(f"Error: Index out of range: {row_index}")
         except IndexError as e:
-            print(e)
+            self.logger.error(e)
 
     def __save_data(self):
         try:
@@ -68,7 +73,7 @@ class ExcelParser:
             for idx, row_data in enumerate(self.data):
                 for col_idx, (key, value) in enumerate(row_data.items()):
                     sheet.cell(row=idx + 2, column=col_idx + 1, value=value)
-
+            # change the file name to not override the original file
             workbook.save(filename=self.file_path)
         except Exception as e:
-            print(f"An unexpected error occurred while saving: {e}")
+            self.logger.error(f"An unexpected error occurred while saving: {e}")
