@@ -3,8 +3,7 @@ import json
 from datetime import datetime
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
-from green_invoice.models import Currency, DocumentLanguage, DocumentType, PaymentCardType, PaymentDealType, \
-    PaymentType, IncomeVatType
+from green_invoice.models import Currency, DocumentLanguage, DocumentType
 
 from logger import Logger
 
@@ -18,21 +17,21 @@ class GreenInvoiceHandler:
         self.status = None
         self.key = key
         self.secret = secret
-        self.logger = Logger.get_logger("GreenInvoiceHandler")
+        self.logger = Logger.get_logger(__name__)
 
     def __send_POST_request(self, headers, end_point, values, request_type):
         global response_body
         data = json.dumps(values).encode('utf-8')  # Convert the dictionary to a JSON string and then encode it to bytes
         self.logger.info(
-            "Sending {} request; URL: {}{}, Values: {}".format(request_type, self.BASE_URL, end_point, values))
+            f"Sending {request_type} request; URL: {self.BASE_URL}{end_point}, Values: {values}")
         try:
             request = Request(self.BASE_URL + end_point, data=data, headers=headers)
             response_body = urlopen(request).read()
             response = urlopen(request)
             status = response.status
             if status == 200:
-                if response_body is not "preview":
-                    self.logger.info("Response body: {}".format(response_body))
+                if request_type is not "preview":
+                    self.logger.info(f"Response body: {response_body}")
                     pass
                 self.logger.info(response_body)
                 pass
@@ -58,8 +57,6 @@ class GreenInvoiceHandler:
 
     def search_client_by_name(self, name):
         end_point = '/clients/search'
-        self.logger.info("Handling {}".format(name))
-
         values = {
             'name': name,
             'active': 'true',
@@ -78,14 +75,14 @@ class GreenInvoiceHandler:
                 return None
 
             elif total_value == 1:
-                self.logger.debug("client {}, found total {} client".format(name, total_value))
+                self.logger.debug(f"client {name}, found total {total_value} client")
                 first_item = parsed_response['items'][0]
                 id_value = first_item['id']
-                self.logger.debug("Parsed id of {} is: {}".format(name, id_value))
+                self.logger.debug(f"Parsed id of {name} is: {id_value}")
                 return id_value
                 pass
             else:
-                self.logger.warning("Found {} clients under the name {}".format(total_value, name))
+                self.logger.warning(f"Found {total_value} clients under the name {name}")
                 return None
         except RuntimeError as err:
             self.logger.error(f"Error in finding client: {err}")
@@ -116,12 +113,7 @@ class GreenInvoiceHandler:
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + self.JWT
         }
-        response_body = self.__send_POST_request(headers, end_point, values, "preview")
-        if 'file' in response_body:
-            time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.__base64_to_pdf(response_body['file'], f"Samples/Invoices/{client_name}_{time_stamp}_Invoice.pdf")
-        else:
-            self.logger.error("'file' key does not exist in the response body.")
+        self.__send_POST_request(headers, end_point, values, "generate")
 
     def parse_values(self, id_value, payment_details, payment_date, income_list):
 
@@ -156,6 +148,6 @@ class GreenInvoiceHandler:
             with open(output_filepath, 'wb') as file:
                 file.write(decoded_data)
 
-            self.logger.info(f"The PDF has been successfully saved at {output_filepath}")
+            self.logger.info(f"The preview PDF has been successfully saved at {output_filepath}")
         except Exception as e:
             self.logger.error(f"An error occurred: {e}")

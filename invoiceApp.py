@@ -20,10 +20,10 @@ class InvoiceApp:
     def __init__(self, command, file_path=None):
         self.logger = Logger.get_logger("main")
         self.logger.info("Starting Invoice App...")
-        self.command = command
-        self.allow_skips = True
 
-        self.key, self.secret = self.read_cred()
+        self.command = command
+
+        self.key, self.secret = self.__read_cred()
         self.green_invoice_client = GreenInvoiceHandler(self.key, self.secret)
         self.green_invoice_client.generate_token()
 
@@ -32,6 +32,8 @@ class InvoiceApp:
         else:
             file_path = input("Please enter the path to the input file: ")
             self.file = ExcelParser(file_path)
+
+        self.allow_skips = True
 
         self.client = None
         self.date_paid = None
@@ -48,16 +50,16 @@ class InvoiceApp:
     def run(self):
         for row_index, row_data in enumerate(self.file.data):
             self.logger.debug(f"Starting row {row_index}")
-            self.__parse_data(row_index)
+            self.__initialize_variables(row_index)
             self.logger.debug(f"Parsed {self.client} row")
 
-            # if self.invoice:
-            #     if self.allow_skips:
-            #         self.logger.debug(f"Skipping invoice {self.invoice}")
-            #         continue
-            #     else:
-            #         self.logger.critical(f"Invoice {self.invoice} already issued. Exit script")
-            #         exit(-1)
+            if self.invoice:
+                if self.allow_skips:
+                    self.logger.debug(f"Skipping invoice {self.invoice}")
+                    continue
+                else:
+                    self.logger.critical(f"Invoice {self.invoice} already issued. Exit script")
+                    exit(-1)
 
             client_id = self.green_invoice_client.search_client_by_name(self.client)
             if client_id is None:
@@ -72,16 +74,20 @@ class InvoiceApp:
                     self.green_invoice_client.generate_new_invoice_preview(values, self.client)
                 elif self.command == 'generate':
                     self.__handle_generate(row_index, values)
-        self.file.save_data()
+                else:
+                    self.logger.error(f"Unknown command: {self.command}")
+                    print(f"Unknown command: {self.command}. Exiting...")
+                    exit(-1)
 
-    def __handle_generate(self,row_index, values):
+        self.logger.info("Finished processing all rows")
+
+    def __handle_generate(self, row_index, values):
         self.green_invoice_client.generate_new_invoice(values, self.client)
         self.file.change_invoice_status(row_index)
-        self.logger.info(f"Changed invoice status for row {row_index}")
         self.allow_skips = False
         self.logger.debug(f"Allowing skips: {self.allow_skips}")
 
-    def __parse_data(self, row_index):
+    def __initialize_variables(self, row_index):
         try:
             row_data = self.file.get_row(row_index)
         except Exception as e:
@@ -132,9 +138,6 @@ class InvoiceApp:
             self.logger.error(f"An error occurred while converting treatment dates: {e}")
         return formatted_dates
 
-    def __handle_invoice_already_issued(self):
-        pass
-
     def __get_payment_method(self, bit, paybox, eft):
         if bit:
             self.payment_method = PaymentType.PAYMENT_APP
@@ -147,6 +150,7 @@ class InvoiceApp:
 
         else:
             self.logger.error("No payment method found")
+            exit(-1)
 
     def __construct_income_list(self):
         income_list = []
@@ -196,7 +200,7 @@ class InvoiceApp:
             exit(-1)
         return [payment_details]
 
-    def read_cred(self, file_path="Samples/Credentials.yml"):
+    def __read_cred(self, file_path="Samples/Credentials.yml"):
         try:
             with open(file_path, 'r') as f:
                 creds = yaml.safe_load(f)
@@ -206,7 +210,7 @@ class InvoiceApp:
 
             return key, secret
         except FileNotFoundError as fileNotFoundErr:
-            self.logger.error(f"error in opening file: {fileNotFoundErr}")
+            self.logger.error(f"error in opening cred file: {fileNotFoundErr}")
             exit(-1)
         except:
             self.logger.error(f"Unexpected error in opening file: {file_path}")
@@ -215,4 +219,4 @@ class InvoiceApp:
 
 if __name__ == "__main__":
     args = get_cli_args()
-    app = InvoiceApp(command=args.command)
+    app = InvoiceApp(command=args.command, file_path=args.file)
