@@ -4,4 +4,4 @@
 *.pdf
 *.log
 __pycache__/
-../GreenInvoice/GreenInvoice/Samples/
+Samples/
