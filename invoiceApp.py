@@ -1,22 +1,39 @@
 import yaml
+import argparse
 from datetime import datetime
-from green_invoice.models import Currency, DocumentLanguage, DocumentType, PaymentCardType, PaymentDealType, \
-    PaymentType, IncomeVatType
+from green_invoice.models import Currency, PaymentType
 from ExcelParser import ExcelParser
 from GreenInvoiceHandler import GreenInvoiceHandler
 from logger import Logger
 
 
+def get_cli_args():
+    parser = argparse.ArgumentParser(description='Invoice App CLI')
+    parser.add_argument('command', choices=['preview', 'generate'], help='Command to execute')
+    parser.add_argument('--file', default=None, help='Path to the input file')
+    args = parser.parse_args()
+    return args
+
+
 class InvoiceApp:
-    def __init__(self):
+
+    def __init__(self, command, file_path=None):
         self.logger = Logger.get_logger("main")
         self.logger.info("Starting Invoice App...")
 
-        self.key, self.secret = self.read_cred()
+        self.command = command
+
+        self.key, self.secret = self.__read_cred()
         self.green_invoice_client = GreenInvoiceHandler(self.key, self.secret)
         self.green_invoice_client.generate_token()
 
-        self.file = ExcelParser("Samples/August.xlsx")
+        if file_path:
+            self.file = ExcelParser(file_path)
+        else:
+            file_path = input("Please enter the path to the input file: ")
+            self.file = ExcelParser(file_path)
+
+        self.allow_skips = True
 
         self.client = None
         self.date_paid = None
@@ -30,46 +47,47 @@ class InvoiceApp:
 
         self.run()
 
-        # self.green_invoice_client.search_client_by_name('Jenna Reichman')
-
-    def read_cred(self, file_path="Samples/Credentials.yml"):
-        try:
-            with open(file_path, 'r') as f:
-                creds = yaml.safe_load(f)
-
-            key = creds.get('key')
-            secret = creds.get('secret')
-
-            return key, secret
-        except FileNotFoundError as fileNotFoundErr:
-            self.logger.error(f"error in opening file: {fileNotFoundErr}")
-            exit(-1)
-        except:
-            self.logger.error(f"Unexpected error in opening file: {file_path}")
-            exit(-1)
-
     def run(self):
         for row_index, row_data in enumerate(self.file.data):
             self.logger.debug(f"Starting row {row_index}")
-            self.__parse_data(row_index)
+            self.__initialize_variables(row_index)
             self.logger.debug(f"Parsed {self.client} row")
+
             if self.invoice:
-                self.__handle_invoice_already_issued()
-            if self.number_of_treatments > 1:
-                print(self.treatments)
+                if self.allow_skips:
+                    self.logger.debug(f"Skipping invoice {self.invoice}")
+                    continue
+                else:
+                    self.logger.critical(f"Invoice {self.invoice} already issued. Exit script")
+                    exit(-1)
+
             client_id = self.green_invoice_client.search_client_by_name(self.client)
             if client_id is None:
                 self.logger.warning(f"Client {self.client} not found")
                 exit(-1)
-            if not self.payment_method:
-                print("No payment method")
+
             else:
                 income_list = self.__construct_income_list()
                 payment_details = self.__construct_payment_details()
                 values = self.green_invoice_client.parse_values(client_id, payment_details, self.date_paid, income_list)
-                self.green_invoice_client.generate_new_invoice(values, self.client)
+                if self.command == 'preview':
+                    self.green_invoice_client.generate_new_invoice_preview(values, self.client)
+                elif self.command == 'generate':
+                    self.__handle_generate(row_index, values)
+                else:
+                    self.logger.error(f"Unknown command: {self.command}")
+                    print(f"Unknown command: {self.command}. Exiting...")
+                    exit(-1)
 
-    def __parse_data(self, row_index):
+        self.logger.info("Finished processing all rows")
+
+    def __handle_generate(self, row_index, values):
+        self.green_invoice_client.generate_new_invoice(values, self.client)
+        self.file.change_invoice_status(row_index)
+        self.allow_skips = False
+        self.logger.debug(f"Allowing skips: {self.allow_skips}")
+
+    def __initialize_variables(self, row_index):
         try:
             row_data = self.file.get_row(row_index)
         except Exception as e:
@@ -120,9 +138,6 @@ class InvoiceApp:
             self.logger.error(f"An error occurred while converting treatment dates: {e}")
         return formatted_dates
 
-    def __handle_invoice_already_issued(self):
-        pass
-
     def __get_payment_method(self, bit, paybox, eft):
         if bit:
             self.payment_method = PaymentType.PAYMENT_APP
@@ -135,6 +150,7 @@ class InvoiceApp:
 
         else:
             self.logger.error("No payment method found")
+            exit(-1)
 
     def __construct_income_list(self):
         income_list = []
@@ -182,9 +198,25 @@ class InvoiceApp:
         else:
             self.logger.error(f"Unknown payment method: {self.payment_method}")
             exit(-1)
-        print([payment_details])
         return [payment_details]
+
+    def __read_cred(self, file_path="Samples/Credentials.yml"):
+        try:
+            with open(file_path, 'r') as f:
+                creds = yaml.safe_load(f)
+
+            key = creds.get('key')
+            secret = creds.get('secret')
+
+            return key, secret
+        except FileNotFoundError as fileNotFoundErr:
+            self.logger.error(f"error in opening cred file: {fileNotFoundErr}")
+            exit(-1)
+        except:
+            self.logger.error(f"Unexpected error in opening file: {file_path}")
+            exit(-1)
 
 
 if __name__ == "__main__":
-    app = InvoiceApp()
+    args = get_cli_args()
+    app = InvoiceApp(command=args.command, file_path=args.file)
