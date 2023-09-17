@@ -58,8 +58,9 @@ class ExcelParser:
     def change_invoice_status(self, row_index: int):
         try:
             if 0 <= row_index < len(self.data):
-                self.data[row_index]['Invoice'] = 'True'
+                self.data[row_index]['Invoice'] = True
                 self.__save_data()
+                self.logger.debug(f"Changed invoice status of row {row_index} to True")
             else:
                 raise IndexError(f"Error: Index out of range: {row_index}")
         except IndexError as e:
@@ -73,7 +74,6 @@ class ExcelParser:
             for idx, row_data in enumerate(self.data):
                 for col_idx, (key, value) in enumerate(row_data.items()):
                     sheet.cell(row=idx + 2, column=col_idx + 1, value=value)
-            # change the file name to not override the original file
-            workbook.save(filename=self.file_path)
+            workbook.save(filename=self.file_path + f"_{current_date_time}.xlsx")
         except Exception as e:
             self.logger.error(f"An unexpected error occurred while saving: {e}")
