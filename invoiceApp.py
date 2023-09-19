@@ -2,6 +2,7 @@ import yaml
 import argparse
 from datetime import datetime
 from green_invoice.models import Currency, PaymentType
+
 from ExcelParser import ExcelParser
 from GreenInvoiceHandler import GreenInvoiceHandler
 from logger import Logger
@@ -84,8 +85,9 @@ class InvoiceApp:
     def __handle_generate(self, row_index, values):
         self.green_invoice_client.generate_new_invoice(values, self.client)
         self.file.change_invoice_status(row_index)
-        self.allow_skips = False
-        self.logger.debug(f"Allowing skips: {self.allow_skips}")
+        if self.allow_skips:
+            self.allow_skips = False
+            self.logger.debug(f"Allowing skips: {self.allow_skips}")
 
     def __initialize_variables(self, row_index):
         try:
@@ -123,6 +125,8 @@ class InvoiceApp:
 
     def __convert_treatments_date(self, treatments_date):
         try:
+            self.logger.debug(f"The type of treatments_date is: {type(treatments_date)}")
+
             if isinstance(treatments_date, datetime):
                 treatments_date = treatments_date.strftime('%m/%d/%Y')
 
@@ -136,6 +140,7 @@ class InvoiceApp:
         except Exception as e:
             formatted_dates = []
             self.logger.error(f"An error occurred while converting treatment dates: {e}")
+        self.logger.debug(f"number of treatments: {len(formatted_dates)}")
         return formatted_dates
 
     def __get_payment_method(self, bit, paybox, eft):

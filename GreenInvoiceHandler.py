@@ -21,25 +21,24 @@ class GreenInvoiceHandler:
 
     def __send_POST_request(self, headers, end_point, values, request_type):
         global response_body
-        data = json.dumps(values).encode('utf-8')  # Convert the dictionary to a JSON string and then encode it to bytes
+        data = json.dumps(values).encode('utf-8')
         self.logger.info(
             f"Sending {request_type} request; URL: {self.BASE_URL}{end_point}, Values: {values}")
         try:
             request = Request(self.BASE_URL + end_point, data=data, headers=headers)
-            response_body = urlopen(request).read()
-            response = urlopen(request)
-            status = response.status
+            response = urlopen(request)  # Store the response object in a variable
+            response_body = response.read()  # Read the response body from the response object
+            status = response.status  # Get the status from the response object
             if status == 200:
-                if request_type is not "preview":
+                if request_type != "preview":
                     self.logger.info(f"Response body: {response_body}")
                     pass
-                self.logger.info(response_body)
-                pass
         except HTTPError as err:
             self.logger.error(err)
             self.logger.error(response_body)
             exit(-1)
-        return json.loads(response_body)  # Parse the JSON response and return
+        return json.loads(response_body)
+
 
     def generate_token(self):
         end_point = '/account/token'
@@ -113,14 +112,15 @@ class GreenInvoiceHandler:
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + self.JWT
         }
-        self.__send_POST_request(headers, end_point, values, "generate")
+        response_body = self.__send_POST_request(headers, end_point, values, "generate")
+        self.logger.debug(f"response_body: {response_body}")
 
     def parse_values(self, id_value, payment_details, payment_date, income_list):
 
         values = {
 
             'type': DocumentType.TAX_INVOICE_RECEIPT,
-            # 'date': payment_date,
+            'date': payment_date,
             'lang': DocumentLanguage.ENGLISH,
             'currency': Currency.ILS,
             'vatType': 0,
