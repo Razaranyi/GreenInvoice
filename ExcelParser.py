@@ -74,6 +74,6 @@ class ExcelParser:
             for idx, row_data in enumerate(self.data):
                 for col_idx, (key, value) in enumerate(row_data.items()):
                     sheet.cell(row=idx + 2, column=col_idx + 1, value=value)
-            workbook.save(filename=self.file_path + f"_{current_date_time}.xlsx")
+            workbook.save(filename=self.file_path)
         except Exception as e:
             self.logger.error(f"An unexpected error occurred while saving: {e}")

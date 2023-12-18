@@ -22,19 +22,21 @@ class GreenInvoiceHandler:
     def __send_POST_request(self, headers, end_point, values, request_type):
         global response_body
         data = json.dumps(values).encode('utf-8')  # Convert the dictionary to a JSON string and then encode it to bytes
-        self.logger.info(
-            f"Sending {request_type} request; URL: {self.BASE_URL}{end_point}, Values: {values}")
+        if request_type != "JWT":
+            self.logger.info(
+                f"Sending {request_type} request; URL: {self.BASE_URL}{end_point}, Values: {values}")
         try:
             request = Request(self.BASE_URL + end_point, data=data, headers=headers)
-            response_body = urlopen(request).read()
             response = urlopen(request)
+            response_body = response.read()
             status = response.status
             if status == 200:
-                if request_type is not "preview":
-                    self.logger.info(f"Response body: {response_body}")
+                if request_type != "JWT":
+                    if request_type != "preview":
+                        self.logger.info(f"Response body: {response_body}")
+                        pass
+                    self.logger.info(response_body)
                     pass
-                self.logger.info(response_body)
-                pass
         except HTTPError as err:
             self.logger.error(err)
             self.logger.error(response_body)
@@ -88,6 +90,17 @@ class GreenInvoiceHandler:
             self.logger.error(f"Error in finding client: {err}")
             return None
 
+    def add_client(self, client_name):
+        end_point = '/clients'
+        values = {
+            'name': client_name
+        }
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + self.JWT
+        }
+        self.__send_POST_request(headers, end_point, values, "add client")
+
     def generate_new_invoice_preview(self, parsed_values, client_name):
         print(f"Generating preview for {client_name}")
         end_point = '/documents/preview'
@@ -120,7 +133,7 @@ class GreenInvoiceHandler:
         values = {
 
             'type': DocumentType.TAX_INVOICE_RECEIPT,
-            # 'date': payment_date,
+            'date': payment_date,
             'lang': DocumentLanguage.ENGLISH,
             'currency': Currency.ILS,
             'vatType': 0,
