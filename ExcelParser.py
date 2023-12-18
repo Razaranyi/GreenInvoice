@@ -48,7 +48,11 @@ class ExcelParser:
     def get_cell(self, row_data, column_name):
         try:
             if row_data and column_name in row_data:
-                return row_data[column_name]
+                cell_value = row_data[column_name]
+                # Check if the cell value is of type float (double) and cast it to int
+                if isinstance(cell_value, float):
+                    return int(cell_value)
+                return cell_value
             else:
                 raise KeyError(f"Error: Column not found: {column_name}")
         except KeyError as e:
@@ -74,6 +78,6 @@ class ExcelParser:
             for idx, row_data in enumerate(self.data):
                 for col_idx, (key, value) in enumerate(row_data.items()):
                     sheet.cell(row=idx + 2, column=col_idx + 1, value=value)
-            workbook.save(filename=self.file_path + f"_{current_date_time}.xlsx")
+            workbook.save(filename=self.file_path)
         except Exception as e:
             self.logger.error(f"An unexpected error occurred while saving: {e}")

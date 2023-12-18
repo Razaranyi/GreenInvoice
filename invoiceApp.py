@@ -9,7 +9,7 @@ from logger import Logger
 
 def get_cli_args():
     parser = argparse.ArgumentParser(description='Invoice App CLI')
-    parser.add_argument('command', choices=['preview', 'generate'], help='Command to execute')
+    parser.add_argument('command', choices=['checkClient', 'preview', 'generate'], help='Command to execute')
     parser.add_argument('--file', default=None, help='Path to the input file')
     args = parser.parse_args()
     return args
@@ -35,7 +35,7 @@ class InvoiceApp:
 
         self.allow_skips = True
 
-        self.client = None
+        self.client_name = None
         self.date_paid = None
         self.amount_paid = None
         self.number_of_treatments = None
@@ -48,10 +48,11 @@ class InvoiceApp:
         self.run()
 
     def run(self):
+        missing_clients = set()
         for row_index, row_data in enumerate(self.file.data):
             self.logger.debug(f"Starting row {row_index}")
-            self.__initialize_variables(row_index)
-            self.logger.debug(f"Parsed {self.client} row")
+            self.__load_row_data(row_index)
+            self.logger.debug(f"Parsed {self.client_name} row")
 
             if self.invoice:
                 if self.allow_skips:
@@ -61,40 +62,74 @@ class InvoiceApp:
                     self.logger.critical(f"Invoice {self.invoice} already issued. Exit script")
                     exit(-1)
 
-            client_id = self.green_invoice_client.search_client_by_name(self.client)
+            result = self.green_invoice_client.search_client_by_name(self.client_name)
+            if result:
+                client_id, client_email = result
+            else:
+                client_id, client_email = None, None
+
             if client_id is None:
-                self.logger.warning(f"Client {self.client} not found")
-                exit(-1)
+                self.logger.warning(f"Client {self.client_name} not found")
+                missing_clients.add(self.client_name)
+                if self.command != 'checkClient':
+                    exit(-1)
 
             else:
                 income_list = self.__construct_income_list()
                 payment_details = self.__construct_payment_details()
-                values = self.green_invoice_client.parse_values(client_id, payment_details, self.date_paid, income_list)
+                values = self.green_invoice_client.parse_values(client_id, payment_details, self.date_paid,
+                                                                income_list, client_email)
+
                 if self.command == 'preview':
-                    self.green_invoice_client.generate_new_invoice_preview(values, self.client)
+                    self.green_invoice_client.generate_new_invoice_preview(values, self.client_name)
                 elif self.command == 'generate':
                     self.__handle_generate(row_index, values)
+                elif self.command == 'checkClient':
+                    pass
                 else:
                     self.logger.error(f"Unknown command: {self.command}")
                     print(f"Unknown command: {self.command}. Exiting...")
                     exit(-1)
+        if missing_clients:
+            self.__handle_missing_clients(missing_clients)
 
         self.logger.info("Finished processing all rows")
 
     def __handle_generate(self, row_index, values):
-        self.green_invoice_client.generate_new_invoice(values, self.client)
+        self.green_invoice_client.generate_new_invoice(values, self.client_name)
         self.file.change_invoice_status(row_index)
         self.allow_skips = False
         self.logger.debug(f"Allowing skips: {self.allow_skips}")
 
-    def __initialize_variables(self, row_index):
+    def __handle_missing_clients(self, missing_clients):
+        print(f"Missing clients: {missing_clients}")
+        response = input(f"Do you want to add all clients? (y/n): ").strip().lower()
+        if response == 'y':
+            for client in missing_clients:
+                print(f"Adding {client}...")
+                self.green_invoice_client.add_client(client)
+        else:
+            for client in list(missing_clients):  # Convert to list for stable iteration
+                print(client)
+                while True:
+                    response = input(f"Do you want to add {client}? (y/n): ").strip().lower()
+                    if response == 'y':
+                        print(f"Adding {client}...")
+                        self.green_invoice_client.add_client(client)
+                        break
+                    elif response == 'n':
+                        exit(-1)
+                    else:
+                        print("Invalid response")
+
+    def __load_row_data(self, row_index):
         try:
             row_data = self.file.get_row(row_index)
         except Exception as e:
             self.logger.error(f"Error in parsing data: {e}")
             exit(-1)
         try:
-            self.client = self.file.get_cell(row_data, 'Client')
+            self.client_name = self.file.get_cell(row_data, 'Client')
             self.date_paid = self.__convert_date_paid(self.file.get_cell(row_data, 'Date Paid'))
             self.amount_paid = self.file.get_cell(row_data, 'Amount Paid')
             self.number_of_treatments = self.file.get_cell(row_data, 'Number of Apts')

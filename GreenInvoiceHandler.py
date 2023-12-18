@@ -22,19 +22,22 @@ class GreenInvoiceHandler:
     def __send_POST_request(self, headers, end_point, values, request_type):
         global response_body
         data = json.dumps(values).encode('utf-8')  # Convert the dictionary to a JSON string and then encode it to bytes
-        self.logger.info(
-            f"Sending {request_type} request; URL: {self.BASE_URL}{end_point}, Values: {values}")
+        if request_type != "JWT":
+            self.logger.info(
+                f"Sending {request_type} request; URL: {self.BASE_URL}{end_point}, Values: {values}")
         try:
             request = Request(self.BASE_URL + end_point, data=data, headers=headers)
-            response_body = urlopen(request).read()
             response = urlopen(request)
+            response_body = response.read()
             status = response.status
             if status == 200:
-                if request_type is not "preview":
-                    self.logger.info(f"Response body: {response_body}")
+                if request_type != "JWT":
+                    if request_type != "preview":
+                        self.logger.info(f"Response body: {response_body}")
+                        pass
+                    else:
+                        self.logger.info(response_body)
                     pass
-                self.logger.info(response_body)
-                pass
         except HTTPError as err:
             self.logger.error(err)
             self.logger.error(response_body)
@@ -79,14 +82,32 @@ class GreenInvoiceHandler:
                 first_item = parsed_response['items'][0]
                 id_value = first_item['id']
                 self.logger.debug(f"Parsed id of {name} is: {id_value}")
-                return id_value
-                pass
+
+                # Check if emails exist and extract the first one
+                emails = first_item.get('emails', [])
+                first_email = emails[0] if emails else None
+                if first_email:
+                    self.logger.debug(f"Parsed email of {name} is: {first_email}")
+                    return id_value, first_email
+                else:
+                    return id_value, None
             else:
                 self.logger.warning(f"Found {total_value} clients under the name {name}")
                 return None
         except RuntimeError as err:
             self.logger.error(f"Error in finding client: {err}")
             return None
+
+    def add_client(self, client_name):
+        end_point = '/clients'
+        values = {
+            'name': client_name
+        }
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + self.JWT
+        }
+        self.__send_POST_request(headers, end_point, values, "add client")
 
     def generate_new_invoice_preview(self, parsed_values, client_name):
         print(f"Generating preview for {client_name}")
@@ -115,12 +136,12 @@ class GreenInvoiceHandler:
         }
         self.__send_POST_request(headers, end_point, values, "generate")
 
-    def parse_values(self, id_value, payment_details, payment_date, income_list):
+    def parse_values(self, id_value, payment_details, payment_date, income_list, client_email=None):
 
         values = {
 
             'type': DocumentType.TAX_INVOICE_RECEIPT,
-            # 'date': payment_date,
+            'date': payment_date,
             'lang': DocumentLanguage.ENGLISH,
             'currency': Currency.ILS,
             'vatType': 0,
@@ -137,6 +158,9 @@ class GreenInvoiceHandler:
             'income': income_list,
             'payment': payment_details,
         }
+        if client_email:
+            values['client']['emails'] = [client_email]
+
         self.logger.debug(f"Values: {values}")
 
         return values
