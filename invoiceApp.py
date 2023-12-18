@@ -62,7 +62,12 @@ class InvoiceApp:
                     self.logger.critical(f"Invoice {self.invoice} already issued. Exit script")
                     exit(-1)
 
-            client_id = self.green_invoice_client.search_client_by_name(self.client_name)
+            result = self.green_invoice_client.search_client_by_name(self.client_name)
+            if result:
+                client_id, client_email = result
+            else:
+                client_id, client_email = None, None
+
             if client_id is None:
                 self.logger.warning(f"Client {self.client_name} not found")
                 missing_clients.add(self.client_name)
@@ -73,12 +78,14 @@ class InvoiceApp:
                 income_list = self.__construct_income_list()
                 payment_details = self.__construct_payment_details()
                 values = self.green_invoice_client.parse_values(client_id, payment_details, self.date_paid,
-                                                                income_list)
+                                                                income_list, client_email)
 
                 if self.command == 'preview':
                     self.green_invoice_client.generate_new_invoice_preview(values, self.client_name)
                 elif self.command == 'generate':
                     self.__handle_generate(row_index, values)
+                elif self.command == 'checkClient':
+                    pass
                 else:
                     self.logger.error(f"Unknown command: {self.command}")
                     print(f"Unknown command: {self.command}. Exiting...")

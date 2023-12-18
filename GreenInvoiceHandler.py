@@ -35,7 +35,8 @@ class GreenInvoiceHandler:
                     if request_type != "preview":
                         self.logger.info(f"Response body: {response_body}")
                         pass
-                    self.logger.info(response_body)
+                    else:
+                        self.logger.info(response_body)
                     pass
         except HTTPError as err:
             self.logger.error(err)
@@ -81,8 +82,15 @@ class GreenInvoiceHandler:
                 first_item = parsed_response['items'][0]
                 id_value = first_item['id']
                 self.logger.debug(f"Parsed id of {name} is: {id_value}")
-                return id_value
-                pass
+
+                # Check if emails exist and extract the first one
+                emails = first_item.get('emails', [])
+                first_email = emails[0] if emails else None
+                if first_email:
+                    self.logger.debug(f"Parsed email of {name} is: {first_email}")
+                    return id_value, first_email
+                else:
+                    return id_value, None
             else:
                 self.logger.warning(f"Found {total_value} clients under the name {name}")
                 return None
@@ -128,7 +136,7 @@ class GreenInvoiceHandler:
         }
         self.__send_POST_request(headers, end_point, values, "generate")
 
-    def parse_values(self, id_value, payment_details, payment_date, income_list):
+    def parse_values(self, id_value, payment_details, payment_date, income_list, client_email=None):
 
         values = {
 
@@ -150,6 +158,9 @@ class GreenInvoiceHandler:
             'income': income_list,
             'payment': payment_details,
         }
+        if client_email:
+            values['client']['emails'] = [client_email]
+
         self.logger.debug(f"Values: {values}")
 
         return values
