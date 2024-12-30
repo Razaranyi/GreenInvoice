@@ -45,7 +45,7 @@ class InvoiceApp:
         self.bank_details = None
         self.app_number = None
 
-        self.run()
+        # self.run()
 
     def run(self):
         missing_clients = set()
@@ -91,9 +91,10 @@ class InvoiceApp:
                     print(f"Unknown command: {self.command}. Exiting...")
                     exit(-1)
         if missing_clients:
-            self.__handle_missing_clients(missing_clients)
-
-        self.logger.info("Finished processing all rows")
+            return missing_clients
+        else:
+            self.logger.info("Finished processing all rows")
+            return self.command + " completed successfully"
 
     def __handle_generate(self, row_index, values):
         self.green_invoice_client.generate_new_invoice(values, self.client_name)
@@ -101,26 +102,8 @@ class InvoiceApp:
         self.allow_skips = False
         self.logger.debug(f"Allowing skips: {self.allow_skips}")
 
-    def __handle_missing_clients(self, missing_clients):
-        print(f"Missing clients: {missing_clients}")
-        response = input(f"Do you want to add all clients? (y/n): ").strip().lower()
-        if response == 'y':
-            for client in missing_clients:
-                print(f"Adding {client}...")
-                self.green_invoice_client.add_client(client)
-        else:
-            for client in list(missing_clients):  # Convert to list for stable iteration
-                print(client)
-                while True:
-                    response = input(f"Do you want to add {client}? (y/n): ").strip().lower()
-                    if response == 'y':
-                        print(f"Adding {client}...")
-                        self.green_invoice_client.add_client(client)
-                        break
-                    elif response == 'n':
-                        exit(-1)
-                    else:
-                        print("Invalid response")
+    def handle_missing_clients(self, missing_clients):
+        self.green_invoice_client.add_client(missing_clients)
 
     def __load_row_data(self, row_index):
         try:
@@ -137,10 +120,7 @@ class InvoiceApp:
             self.bank_details = [self.file.get_cell(row_data, 'Bank'), self.file.get_cell(row_data, 'Bank Branch '),
                                  self.file.get_cell(row_data, 'Account #')]
             self.invoice = self.file.get_cell(row_data, 'Invoice')
-            bit = self.file.get_cell(row_data, 'Bit')
-            paybox = self.file.get_cell(row_data, 'Paybox')
-            eft = self.file.get_cell(row_data, 'EFT')
-            self.__get_payment_method(bit, paybox, eft)
+            self.__get_payment_method(row_data)
         except Exception as e:
             self.logger.error(f"Error in parsing data: {e}")
             exit(-1)
@@ -173,7 +153,11 @@ class InvoiceApp:
             self.logger.error(f"An error occurred while converting treatment dates: {e}")
         return formatted_dates
 
-    def __get_payment_method(self, bit, paybox, eft):
+    def __get_payment_method(self, row_data):
+        bit = self.file.get_cell(row_data, 'Bit')
+        paybox = self.file.get_cell(row_data, 'Paybox')
+        eft = self.file.get_cell(row_data, 'EFT')
+        cash = self.file.get_cell(row_data, 'Cash')
         if bit:
             self.payment_method = PaymentType.PAYMENT_APP
             self.app_number = 1
@@ -182,8 +166,11 @@ class InvoiceApp:
             self.app_number = 3
         elif eft:
             self.payment_method = PaymentType.ELECTRONIC_FUND_TRANSFER
+        elif cash:
+            self.payment_method = PaymentType.CASH
 
         else:
+            self.logger.debug(f"name: {self.client_name}")
             self.logger.error("No payment method found")
             exit(-1)
 
@@ -230,6 +217,9 @@ class InvoiceApp:
                 'bankBranch': str(self.bank_details[1]),
                 'bankAccount': str(self.bank_details[2]),
             })
+        elif self.payment_method == PaymentType.CASH:  # Cash
+            pass
+
         else:
             self.logger.error(f"Unknown payment method: {self.payment_method}")
             exit(-1)
@@ -251,7 +241,6 @@ class InvoiceApp:
             self.logger.error(f"Unexpected error in opening file: {file_path}")
             exit(-1)
 
-
-if __name__ == "__main__":
-    args = get_cli_args()
-    app = InvoiceApp(command=args.command, file_path=args.file)
+# if __name__ == "__main__":
+# args = get_cli_args()
+# app = InvoiceApp(command=args.command, file_path=args.file)

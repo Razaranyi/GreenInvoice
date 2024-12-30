@@ -34,10 +34,8 @@ class GreenInvoiceHandler:
                 if request_type != "JWT":
                     if request_type != "preview":
                         self.logger.info(f"Response body: {response_body}")
-                        pass
                     else:
                         self.logger.info(response_body)
-                    pass
         except HTTPError as err:
             self.logger.error(err)
             self.logger.error(response_body)

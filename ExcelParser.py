@@ -1,6 +1,5 @@
 from datetime import datetime
 from openpyxl import load_workbook
-
 from logger import Logger
 
 current_date_time = datetime.now().strftime("%Y%m%d_%H%M%S")
