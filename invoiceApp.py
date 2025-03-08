@@ -54,7 +54,8 @@ class InvoiceApp:
             self.__load_row_data(row_index)
             self.logger.debug(f"Parsed {self.client_name} row")
 
-            if self.invoice:
+            # Only skip invoiced rows for preview and generate commands
+            if self.invoice and self.command != 'checkClient':
                 if self.allow_skips:
                     self.logger.debug(f"Skipping invoice {self.invoice}")
                     continue
