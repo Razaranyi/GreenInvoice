@@ -87,7 +87,17 @@ class ExcelManagerUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Green Invoice Manager")
-        self.setGeometry(100, 100, 1200, 800)
+        
+        # Get screen size and set window size to 80% of screen
+        screen = QApplication.primaryScreen().availableGeometry()
+        width = int(screen.width() * 0.8)
+        height = int(screen.height() * 0.8)
+        self.setGeometry(
+            (screen.width() - width) // 2,  # Center horizontally
+            (screen.height() - height) // 2,  # Center vertically
+            width,
+            height
+        )
         
         # Initialize variables
         self.df = None  # For display
@@ -349,16 +359,7 @@ class ExcelManagerUI(QMainWindow):
             boolean_columns = {'Cash', 'Bit', 'Paybox', 'EFT', 'Invoice'}
             for col in boolean_columns:
                 if col in self.df.columns:
-                    # Print sample values before conversion
-                    print(f"\nBefore conversion - {col} values:")
-                    print(self.df[col].head())
-                    
-                    # Convert to boolean
                     self.df[col] = self.df[col].apply(lambda x: self.get_boolean_value(x))
-                    
-                    # Print sample values after conversion
-                    print(f"\nAfter conversion - {col} values:")
-                    print(self.df[col].head())
 
             # Remove empty rows (where 'Client' is empty)
             self.df = self.df.dropna(subset=['Client']).reset_index(drop=True)
@@ -371,6 +372,24 @@ class ExcelManagerUI(QMainWindow):
             headers = list(self.df.columns) + ["Status"]
             self.table.setHorizontalHeaderLabels(headers)
             
+            # Calculate total width and column proportions
+            total_width = self.table.viewport().width()
+            
+            # Define column width proportions (total should be 100)
+            width_proportions = {
+                'Client': 20,  # 20% for client name
+                'Date Paid': 10,
+                'Treatment': 15,
+                'Amount': 8,
+                'Account': 8,
+                'Bank': 8,
+                'Bank Branch': 8,
+                'Status': 3,
+            }
+            # Boolean columns (checkboxes) get 4% each
+            for col in boolean_columns:
+                width_proportions[col] = 4
+            
             # Fill data
             for i in range(len(self.df)):
                 for j, column in enumerate(self.df.columns):
@@ -378,8 +397,7 @@ class ExcelManagerUI(QMainWindow):
                     
                     # Check if this is a boolean column
                     if column in boolean_columns:
-                        is_checked = bool(value)  # Use direct boolean conversion since we already converted the values
-                        print(f"Row {i}, Column {column}: Original Value = {value}, Checked = {is_checked}")  # Debug print
+                        is_checked = bool(value)
                         checkbox_widget = CheckBoxWidget(is_checked)
                         self.table.setCellWidget(i, j, checkbox_widget)
                     else:
@@ -398,8 +416,14 @@ class ExcelManagerUI(QMainWindow):
                     status_item.setForeground(QColor("green"))
                 self.table.setItem(i, len(self.df.columns), status_item)
             
-            # Adjust column widths
-            self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+            # Set dynamic column widths
+            for j, column in enumerate(headers):
+                proportion = width_proportions.get(column, 6)  # default 6% for unspecified columns
+                width = int(total_width * proportion / 100)
+                self.table.setColumnWidth(j, width)
+            
+            # Make columns resizable by user
+            self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
     
     def save_excel(self):
         """Save changes back to Excel"""

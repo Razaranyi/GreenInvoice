@@ -137,21 +137,24 @@ class InvoiceApp:
             try:
                 self.amount_paid = float(amount_paid)
             except (ValueError, TypeError):
-                self.logger.error(f"Invalid amount paid format in row {row_index}: {amount_paid}")
+                msg = f"Invalid amount paid format in row {row_index}: {amount_paid}"
+                self.logger.error(msg)
                 exit(-1)
 
             # Get and convert number of treatments
-            number_of_treatments = self.file.get_cell(row_data, 'Number of Apts')
-            if not number_of_treatments:
+            num_apts = self.file.get_cell(row_data, 'Number of Apts')
+            if not num_apts:
                 self.logger.error(f"Missing number of treatments in row {row_index}")
                 exit(-1)
             try:
-                self.number_of_treatments = int(number_of_treatments)
+                self.number_of_treatments = int(num_apts)
                 if self.number_of_treatments <= 0:
-                    self.logger.error(f"Number of treatments must be positive in row {row_index}")
+                    msg = f"Number of treatments must be positive in row {row_index}"
+                    self.logger.error(msg)
                     exit(-1)
             except (ValueError, TypeError):
-                self.logger.error(f"Invalid number of treatments format in row {row_index}: {number_of_treatments}")
+                msg = f"Invalid number of treatments in row {row_index}: {num_apts}"
+                self.logger.error(msg)
                 exit(-1)
 
             # Get and convert treatments
@@ -164,7 +167,10 @@ class InvoiceApp:
                 self.logger.error(f"Invalid treatment dates format in row {row_index}")
                 exit(-1)
             if len(self.treatments) != self.number_of_treatments:
-                self.logger.error(f"Number of treatment dates ({len(self.treatments)}) does not match number of treatments ({self.number_of_treatments}) in row {row_index}")
+                msg = (f"Number of treatment dates ({len(self.treatments)}) does not "
+                      f"match number of treatments ({self.number_of_treatments}) "
+                      f"in row {row_index}")
+                self.logger.error(msg)
                 exit(-1)
 
             # Get bank details
@@ -173,10 +179,8 @@ class InvoiceApp:
             account = self.file.get_cell(row_data, 'Account #')
             self.bank_details = [bank, branch, account]
 
-            # Get invoice status
+            # Get invoice status and payment method
             self.invoice = self.file.get_cell(row_data, 'Invoice')
-
-            # Get and validate payment method
             self.__get_payment_method(row_data)
 
         except Exception as e:
@@ -189,23 +193,23 @@ class InvoiceApp:
             if not date_paid:
                 return None
                 
-            # If it's already a datetime object, just format it
             if isinstance(date_paid, datetime):
                 return date_paid.strftime("%Y-%m-%d")
                 
-            # If it's a string, try to parse it
             try:
                 # Try mm/dd/yyyy format first
-                parsed_date = datetime.strptime(str(date_paid).strip(), '%m/%d/%Y')
+                parsed = datetime.strptime(str(date_paid).strip(), '%m/%d/%Y')
             except ValueError:
                 try:
                     # Try yyyy-mm-dd format
-                    parsed_date = datetime.strptime(str(date_paid).strip(), '%Y-%m-%d')
+                    parsed = datetime.strptime(str(date_paid).strip(), '%Y-%m-%d')
                 except ValueError:
-                    self.logger.error(f"Date paid '{date_paid}' is not in a valid format (expected mm/dd/yyyy or yyyy-mm-dd)")
+                    msg = (f"Date paid '{date_paid}' is not in a valid format "
+                          "(expected mm/dd/yyyy or yyyy-mm-dd)")
+                    self.logger.error(msg)
                     return None
                     
-            return parsed_date.strftime("%Y-%m-%d")
+            return parsed.strftime("%Y-%m-%d")
             
         except Exception as e:
             self.logger.error(f"Could not convert date_paid: {e}")
@@ -216,29 +220,27 @@ class InvoiceApp:
             if not treatments_date:
                 return []
 
-            # If it's already a datetime, convert to string in mm/dd/yyyy format
             if isinstance(treatments_date, datetime):
                 return [treatments_date.strftime('%Y-%m-%d')]
 
-            # If it's not a string, convert it to string
             treatments_date = str(treatments_date).strip()
-
-            # Split the dates and format them
             dates = [date.strip() for date in treatments_date.split(',')]
             formatted_dates = []
             
             for date in dates:
                 try:
                     # Try mm/dd/yyyy format first
-                    parsed_date = datetime.strptime(date, '%m/%d/%Y')
+                    parsed = datetime.strptime(date, '%m/%d/%Y')
                 except ValueError:
                     try:
                         # Try yyyy-mm-dd format
-                        parsed_date = datetime.strptime(date, '%Y-%m-%d')
+                        parsed = datetime.strptime(date, '%Y-%m-%d')
                     except ValueError:
-                        self.logger.error(f"Treatment date '{date}' is not in a valid format (expected mm/dd/yyyy or yyyy-mm-dd)")
+                        msg = (f"Treatment date '{date}' is not in valid format "
+                              "(expected mm/dd/yyyy or yyyy-mm-dd)")
+                        self.logger.error(msg)
                         continue
-                formatted_dates.append(parsed_date.strftime('%Y-%m-%d'))
+                formatted_dates.append(parsed.strftime('%Y-%m-%d'))
                 
             return formatted_dates
             
@@ -251,6 +253,7 @@ class InvoiceApp:
         paybox = self.file.get_cell(row_data, 'Paybox')
         eft = self.file.get_cell(row_data, 'EFT')
         cash = self.file.get_cell(row_data, 'Cash')
+        
         if bit:
             self.payment_method = PaymentType.PAYMENT_APP
             self.app_number = 1
@@ -261,7 +264,6 @@ class InvoiceApp:
             self.payment_method = PaymentType.ELECTRONIC_FUND_TRANSFER
         elif cash:
             self.payment_method = PaymentType.CASH
-
         else:
             self.logger.debug(f"name: {self.client_name}")
             self.logger.error("No payment method found")
