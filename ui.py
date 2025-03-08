@@ -2,7 +2,7 @@ import sys
 import pandas as pd
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
-                           QFileDialog, QMessageBox, QLabel, QHeaderView, QCheckBox)
+                           QFileDialog, QMessageBox, QLabel, QHeaderView, QCheckBox, QLineEdit)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QColor
 from invoiceApp import InvoiceApp
@@ -102,6 +102,7 @@ class ExcelManagerUI(QMainWindow):
         # Initialize variables
         self.df = None  # For display
         self.original_df = None  # For Excel storage
+        self.filtered_df = None  # New: for storing filtered results
         self.current_file = None
         self.processed_rows = set()
         
@@ -125,6 +126,24 @@ class ExcelManagerUI(QMainWindow):
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
         
+        # Create search layout
+        search_layout = QHBoxLayout()
+        
+        # Create search bar
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search clients...")
+        self.search_bar.textChanged.connect(self.filter_table)
+        self.search_bar.setMinimumWidth(200)
+        
+        # Create clear button
+        self.clear_button = QPushButton("Clear Search")
+        self.clear_button.clicked.connect(self.clear_search)
+        
+        # Add search widgets to search layout
+        search_layout.addWidget(self.search_bar)
+        search_layout.addWidget(self.clear_button)
+        search_layout.addStretch()
+        
         # Create buttons layout
         button_layout = QHBoxLayout()
         
@@ -146,6 +165,7 @@ class ExcelManagerUI(QMainWindow):
         self.table = CustomTableWidget()
         
         # Add widgets to main layout
+        layout.addLayout(search_layout)
         layout.addLayout(button_layout)
         layout.addWidget(self.table)
         
@@ -364,12 +384,44 @@ class ExcelManagerUI(QMainWindow):
             # Remove empty rows (where 'Client' is empty)
             self.df = self.df.dropna(subset=['Client']).reset_index(drop=True)
             
+            # Initialize filtered_df with all data
+            self.filtered_df = self.df
+            
+            # Display the filtered data
+            self.display_filtered_data()
+    
+    def filter_table(self):
+        """Filter table based on search text"""
+        if self.df is None:
+            return
+            
+        search_text = self.search_bar.text().lower()
+        
+        if not search_text:
+            # If search is empty, show all rows
+            self.filtered_df = self.df
+        else:
+            # Filter rows where client name contains search text
+            mask = self.df['Client'].str.lower().str.contains(search_text, na=False)
+            self.filtered_df = self.df[mask]
+        
+        # Update the display with filtered data
+        self.display_filtered_data()
+    
+    def clear_search(self):
+        """Clear search bar and show all data"""
+        self.search_bar.clear()
+        self.filter_table()
+
+    def display_filtered_data(self):
+        """Display filtered DataFrame in table"""
+        if self.filtered_df is not None:
             # Set table dimensions
-            self.table.setRowCount(len(self.df))
-            self.table.setColumnCount(len(self.df.columns) + 1)  # +1 for status column
+            self.table.setRowCount(len(self.filtered_df))
+            self.table.setColumnCount(len(self.filtered_df.columns) + 1)  # +1 for status column
             
             # Set headers
-            headers = list(self.df.columns) + ["Status"]
+            headers = list(self.filtered_df.columns) + ["Status"]
             self.table.setHorizontalHeaderLabels(headers)
             
             # Calculate total width and column proportions
@@ -377,7 +429,7 @@ class ExcelManagerUI(QMainWindow):
             
             # Define column width proportions (total should be 100)
             width_proportions = {
-                'Client': 20,  # 20% for client name
+                'Client': 20,
                 'Date Paid': 10,
                 'Treatment': 15,
                 'Amount': 8,
@@ -386,16 +438,17 @@ class ExcelManagerUI(QMainWindow):
                 'Bank Branch': 8,
                 'Status': 3,
             }
-            # Boolean columns (checkboxes) get 4% each
+            
+            # Boolean columns get 4% each
+            boolean_columns = {'Cash', 'Bit', 'Paybox', 'EFT', 'Invoice'}
             for col in boolean_columns:
                 width_proportions[col] = 4
             
             # Fill data
-            for i in range(len(self.df)):
-                for j, column in enumerate(self.df.columns):
-                    value = self.df.iloc[i][column]
+            for i in range(len(self.filtered_df)):
+                for j, column in enumerate(self.filtered_df.columns):
+                    value = self.filtered_df.iloc[i][column]
                     
-                    # Check if this is a boolean column
                     if column in boolean_columns:
                         is_checked = bool(value)
                         checkbox_widget = CheckBoxWidget(is_checked)
@@ -403,7 +456,7 @@ class ExcelManagerUI(QMainWindow):
                     else:
                         formatted_value = self.format_value(value, column)
                         item = QTableWidgetItem(formatted_value)
-                        if column == 'Client':  # Make client column bold
+                        if column == 'Client':
                             font = item.font()
                             font.setBold(True)
                             item.setFont(font)
@@ -411,20 +464,21 @@ class ExcelManagerUI(QMainWindow):
                 
                 # Add status column
                 status_item = QTableWidgetItem("")
-                if i in self.processed_rows:
+                original_index = self.filtered_df.index[i]
+                if original_index in self.processed_rows:
                     status_item.setText("✓")
                     status_item.setForeground(QColor("green"))
-                self.table.setItem(i, len(self.df.columns), status_item)
+                self.table.setItem(i, len(self.filtered_df.columns), status_item)
             
             # Set dynamic column widths
             for j, column in enumerate(headers):
-                proportion = width_proportions.get(column, 6)  # default 6% for unspecified columns
+                proportion = width_proportions.get(column, 6)
                 width = int(total_width * proportion / 100)
                 self.table.setColumnWidth(j, width)
             
             # Make columns resizable by user
             self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-    
+
     def save_excel(self):
         """Save changes back to Excel"""
         if self.df is not None and self.current_file:
