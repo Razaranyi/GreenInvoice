@@ -246,6 +246,19 @@ class ExcelManagerUI(QMainWindow):
                 return str(value)
         return str(value)
 
+    def sort_dataframe(self, df):
+        """Sort DataFrame by Date Paid with empty dates at the end"""
+        if df is None or 'Date Paid' not in df.columns:
+            return df
+            
+        # Convert dates to datetime for proper sorting
+        df['sort_date'] = pd.to_datetime(df['Date Paid'], format='%m/%d/%Y', errors='coerce')
+        
+        # Sort by date, with NaT (empty dates) at the end
+        df = df.sort_values(by='sort_date', na_position='last').drop('sort_date', axis=1)
+        
+        return df.reset_index(drop=True)
+
     def load_excel(self):
         """Load Excel file and display in table"""
         file_name, _ = QFileDialog.getOpenFileName(
@@ -265,8 +278,9 @@ class ExcelManagerUI(QMainWindow):
                         lambda x: pd.to_datetime(x).strftime('%m/%d/%Y') if pd.notna(x) and not isinstance(x, str) else x
                     )
                 
-                # Create display DataFrame
+                # Create display DataFrame and sort it
                 self.df = self.original_df.copy()
+                self.df = self.sort_dataframe(self.df)
                 
                 # Format display values
                 for column in self.df.columns:
@@ -405,6 +419,9 @@ class ExcelManagerUI(QMainWindow):
             mask = self.df['Client'].str.lower().str.contains(search_text, na=False)
             self.filtered_df = self.df[mask]
         
+        # Sort the filtered data
+        self.filtered_df = self.sort_dataframe(self.filtered_df)
+        
         # Update the display with filtered data
         self.display_filtered_data()
     
@@ -460,6 +477,8 @@ class ExcelManagerUI(QMainWindow):
                             font = item.font()
                             font.setBold(True)
                             item.setFont(font)
+                        if column == 'Date Paid' and (pd.isna(value) or str(value).strip() == ""):
+                            item.setBackground(QColor(255, 150, 150))  # More prominent error red background
                         self.table.setItem(i, j, item)
                 
                 # Add status column
@@ -483,6 +502,10 @@ class ExcelManagerUI(QMainWindow):
         """Save changes back to Excel"""
         if self.df is not None and self.current_file:
             try:
+                # First, sort the current DataFrames
+                self.df = self.sort_dataframe(self.df)
+                self.original_df = self.sort_dataframe(self.original_df)
+                
                 # Create a copy of the DataFrame to update
                 display_df = self.df.copy()
                 save_df = self.original_df.copy() if self.original_df is not None else pd.DataFrame(columns=self.df.columns)
@@ -516,6 +539,10 @@ class ExcelManagerUI(QMainWindow):
                         display_df.at[i, column] = value
                         save_df.at[i, column] = excel_data[column]
                 
+                # Sort both DataFrames again after updates
+                display_df = self.sort_dataframe(display_df)
+                save_df = self.sort_dataframe(save_df)
+                
                 # Create Excel writer with xlsxwriter engine
                 writer = pd.ExcelWriter(self.current_file, engine='xlsxwriter')
                 
@@ -545,9 +572,12 @@ class ExcelManagerUI(QMainWindow):
                 # Save and close
                 writer.close()
                 
-                # Update our DataFrames
+                # Update our DataFrames with the sorted versions
                 self.original_df = save_df
                 self.df = display_df
+                
+                # Refresh the display to show the sorted data
+                self.display_data()
                 
                 QMessageBox.information(self, "Success", "File saved successfully!")
             except Exception as e:
@@ -556,9 +586,6 @@ class ExcelManagerUI(QMainWindow):
     def add_row(self):
         """Add new empty row to table"""
         if self.df is not None:
-            current_row = self.table.rowCount()
-            self.table.insertRow(current_row)
-            
             # Create empty row with correct data types
             new_row_data = {}
             new_row_excel_data = {}
@@ -571,26 +598,20 @@ class ExcelManagerUI(QMainWindow):
                     new_row_data[column] = ""
                     new_row_excel_data[column] = None
             
-            # Add empty cells to table
-            for j, column in enumerate(self.df.columns):
-                if column in {'Cash', 'Bit', 'Paybox', 'EFT', 'Invoice'}:
-                    checkbox_widget = CheckBoxWidget(False)
-                    self.table.setCellWidget(current_row, j, checkbox_widget)
-                else:
-                    self.table.setItem(current_row, j, QTableWidgetItem(""))
-            
-            # Add empty status cell
-            self.table.setItem(current_row, len(self.df.columns), QTableWidgetItem(""))
-            
-            # Update both DataFrames
+            # Add to DataFrames
             new_row_df = pd.DataFrame([new_row_data])
             self.df = pd.concat([self.df, new_row_df], ignore_index=True)
+            self.df = self.sort_dataframe(self.df)
             
             new_row_excel_df = pd.DataFrame([new_row_excel_data])
             if self.original_df is None:
                 self.original_df = new_row_excel_df
             else:
                 self.original_df = pd.concat([self.original_df, new_row_excel_df], ignore_index=True)
+                self.original_df = self.sort_dataframe(self.original_df)
+            
+            # Update display
+            self.display_data()
     
     def check_clients(self):
         """Check clients using InvoiceApp"""
