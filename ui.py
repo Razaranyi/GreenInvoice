@@ -259,39 +259,47 @@ class ExcelManagerUI(QMainWindow):
         
         return df.reset_index(drop=True)
 
-    def load_excel(self):
-        """Load Excel file and display in table"""
-        file_name, _ = QFileDialog.getOpenFileName(
-            self, "Open Excel File", "", "Excel Files (*.xlsx *.xls)")
+    def load_excel(self, file_path=None):
+        if not file_path and hasattr(self, 'current_file'):
+            file_path = self.current_file
         
-        if file_name:
-            try:
-                # Read Excel file into original_df
-                self.original_df = pd.read_excel(file_name, sheet_name='EFT & Paybox')
-                
-                # Convert dates to proper format in original_df
-                if 'Date Paid' in self.original_df.columns:
-                    self.original_df['Date Paid'] = pd.to_datetime(self.original_df['Date Paid']).dt.strftime('%m/%d/%Y')
-                
-                if 'Treatment' in self.original_df.columns:
-                    self.original_df['Treatment'] = self.original_df['Treatment'].apply(
-                        lambda x: pd.to_datetime(x).strftime('%m/%d/%Y') if pd.notna(x) and not isinstance(x, str) else x
-                    )
-                
-                # Create display DataFrame and sort it
-                self.df = self.original_df.copy()
-                self.df = self.sort_dataframe(self.df)
-                
-                # Format display values
-                for column in self.df.columns:
-                    if column in self.display_formats:
-                        self.df[column] = self.df[column].apply(self.display_formats[column])
-                
-                self.current_file = file_name
-                self.display_data()
-                self.update_button_states(True)
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Error loading file: {str(e)}")
+        if not file_path:
+            file_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Open Excel File",
+                "",
+                "Excel Files (*.xlsx *.xls)"
+            )
+            if not file_path:  # User cancelled
+                return
+        
+        self.current_file = file_path
+        try:
+            # Read Excel file into original_df
+            self.original_df = pd.read_excel(file_path, sheet_name='EFT & Paybox')
+            
+            # Convert dates to proper format in original_df
+            if 'Date Paid' in self.original_df.columns:
+                self.original_df['Date Paid'] = pd.to_datetime(self.original_df['Date Paid']).dt.strftime('%m/%d/%Y')
+            
+            if 'Treatment' in self.original_df.columns:
+                self.original_df['Treatment'] = self.original_df['Treatment'].apply(
+                    lambda x: pd.to_datetime(x).strftime('%m/%d/%Y') if pd.notna(x) and not isinstance(x, str) else x
+                )
+            
+            # Create display DataFrame and sort it
+            self.df = self.original_df.copy()
+            self.df = self.sort_dataframe(self.df)
+            
+            # Format display values
+            for column in self.df.columns:
+                if column in self.display_formats:
+                    self.df[column] = self.df[column].apply(self.display_formats[column])
+            
+            self.display_data()
+            self.update_button_states(True)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error loading file: {str(e)}")
     
     def is_boolean_column(self, column_name, value=None):
         """Check if a column should be treated as boolean"""
@@ -647,19 +655,18 @@ class ExcelManagerUI(QMainWindow):
                 invoice_app = InvoiceApp(command="generate", file_path=self.current_file)
                 result = invoice_app.run()
                 
-                # Check if any invoices were processed
-                if result is True:  # generate command returns True on success
-                    # Mark all non-invoiced rows as processed
-                    for i in range(self.table.rowCount()):
-                        invoice_cell = self.table.cellWidget(i, self.df.columns.get_loc('Invoice'))
-                        if invoice_cell and not invoice_cell.isChecked():
-                            self.processed_rows.add(i)
-                    
-                    # Refresh the display to show checkmarks
+                if isinstance(result, str) and "completed successfully" in result:
+                    # Success case
+                    current_file = self.current_file  # Store current file path
+                    self.load_excel(current_file)  # Pass the file path explicitly
                     self.display_data()
-                    QMessageBox.information(self, "Success", "Invoices processed successfully!")
+                    QMessageBox.information(self, "Success", "Invoice processed successfully!")
+                elif isinstance(result, set):
+                    # Missing clients case
+                    QMessageBox.warning(self, "Warning", f"Missing clients: {', '.join(result)}")
                 else:
-                    QMessageBox.warning(self, "Warning", "No invoices were processed.")
+                    # Error case
+                    QMessageBox.critical(self, "Error", "Failed to process invoice")
                 
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Error processing invoices: {str(e)}")

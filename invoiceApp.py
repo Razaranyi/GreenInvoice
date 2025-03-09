@@ -1,7 +1,7 @@
 import yaml
 import argparse
 from datetime import datetime
-from green_invoice.models import Currency, PaymentType
+from green_invoice.models import Currency, PaymentType, DocumentType
 from ExcelParser import ExcelParser
 from GreenInvoiceHandler import GreenInvoiceHandler
 from logger import Logger
@@ -261,7 +261,7 @@ class InvoiceApp:
             self.payment_method = PaymentType.PAYMENT_APP
             self.app_number = 3
         elif eft:
-            self.payment_method = PaymentType.ELECTRONIC_FUND_TRANSFER
+            self.payment_method = PaymentType.BANK_TRANSFER
         elif cash:
             self.payment_method = PaymentType.CASH
         else:
@@ -284,15 +284,13 @@ class InvoiceApp:
                 }
             )
         return income_list
-
+ 
     def __construct_payment_details(self):
-
-        price = self.amount_paid
 
         payment_details = {
             'date': self.date_paid,
             'type': self.payment_method,
-            'price': price,
+            'price': self.amount_paid,
             'currency': Currency.ILS,
             'dueDate': self.date_paid,
         }
@@ -306,7 +304,7 @@ class InvoiceApp:
                 payment_details.update({
                     'appType': 3
                 })
-        elif self.payment_method == PaymentType.ELECTRONIC_FUND_TRANSFER:
+        elif self.payment_method == PaymentType.BANK_TRANSFER:
             payment_details.update({
                 'bankName': str(self.bank_details[0]),
                 'bankBranch': str(self.bank_details[1]),

@@ -12,12 +12,12 @@ class DocumentLanguage(str, Enum):
 class DocumentType(str, Enum):
     INVOICE = 320
     RECEIPT = 305
-    TAX_INVOICE_RECEIPT = 330
+    TAX_INVOICE_RECEIPT = 320
 
 class PaymentType(str, Enum):
     CASH = 1
     CHECK = 2
     CREDIT_CARD = 3
     BANK_TRANSFER = 4
-    ELECTRONIC_FUND_TRANSFER = 5
+    # ELECTRONIC_FUND_TRANSFER = 5
     PAYMENT_APP = 10 
