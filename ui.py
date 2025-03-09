@@ -247,15 +247,25 @@ class ExcelManagerUI(QMainWindow):
         return str(value)
 
     def sort_dataframe(self, df):
-        """Sort DataFrame by Date Paid with empty dates at the end"""
+        """Sort DataFrame by Date Paid and Invoice status"""
         if df is None or 'Date Paid' not in df.columns:
             return df
-            
+        
         # Convert dates to datetime for proper sorting
         df['sort_date'] = pd.to_datetime(df['Date Paid'], format='%m/%d/%Y', errors='coerce')
         
-        # Sort by date, with NaT (empty dates) at the end
-        df = df.sort_values(by='sort_date', na_position='last').drop('sort_date', axis=1)
+        # Create boolean column for sorting by Invoice status (TRUE comes first)
+        df['sort_invoice'] = df['Invoice'].map({'TRUE': True, 'FALSE': False})
+        
+        # Sort by date first, then by invoice status (True first, False last)
+        df = df.sort_values(
+            by=['sort_date', 'sort_invoice'], 
+            ascending=[True, False],
+            na_position='last'
+        )
+        
+        # Remove temporary sorting columns
+        df = df.drop(['sort_date', 'sort_invoice'], axis=1)
         
         return df.reset_index(drop=True)
 
